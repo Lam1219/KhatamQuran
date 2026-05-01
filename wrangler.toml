@@ -1,0 +1,11 @@
+name = "quran-khatam-sync"
+main = "worker.js"
+compatibility_date = "2024-05-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "quran-khatam-db"
+database_id = "6cb2b76c-c1be-4b95-b3fd-f22eea40a783" # Replace with ID from step 1
+
+[assets]
+directory = "public" # We'll put index.html in /public

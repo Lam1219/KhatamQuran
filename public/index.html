@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quran Khatam Coordinator</title>
+  <meta name="description" content="Coordinate Quran Khatams seamlessly among your group.">
+  <style>
+    :root {
+      --bg: #f7f3e8; --surface: #ffffff; --surface-alt: #dec2af;
+      --text-primary: #747c70; --text-secondary: #a0a088;
+      --accent: #c37a67; --accent-hover: #e9be9b;
+      --radius: 12px; --shadow: 0 4px 16px rgba(116, 124, 112, 0.08);
+      --transition: all 0.2s ease;
+      --sync-online: #5a8f5a; --sync-offline: #c37a67; --sync-syncing: #a0a088;
+      --error: #c0392b; --success: #5a8f5a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.6; min-height: 100vh; }
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem 1.25rem; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+    .sync-pill { font-size: 0.8rem; font-weight: 600; padding: 0.35rem 0.7rem; border-radius: 20px; background: var(--surface-alt); color: var(--text-secondary); display: flex; align-items: center; gap: 0.4rem; }
+    .sync-pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--sync-offline); transition: background 0.3s; }
+    .sync-pill.online::before { background: var(--sync-online); box-shadow: 0 0 6px var(--sync-online); }
+    .sync-pill.syncing::before { animation: pulse 1.2s infinite; background: var(--sync-syncing); }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .btn { background: var(--accent); color: #fff; border: none; padding: 0.75rem 1.25rem; border-radius: var(--radius); cursor: pointer; font-weight: 600; font-size: 0.95rem; transition: var(--transition); min-height: 44px; }
+    .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-outline { background: transparent; border: 1.5px solid var(--text-secondary); color: var(--text-primary); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm { padding: 0.5rem 0.85rem; font-size: 0.85rem; }
+
+    .countdown-card { background: var(--surface); padding: 1.75rem; border-radius: var(--radius); box-shadow: var(--shadow); text-align: center; margin-bottom: 2rem; border-top: 3px solid var(--accent); }
+    .countdown-val { font-size: 3rem; font-weight: 800; color: var(--accent); line-height: 1.1; }
+    .countdown-sub { font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 0.5rem; }
+
+    .assignment-grid { display: grid; gap: 1rem; }
+    .reader-card { background: var(--surface); padding: 1.25rem; border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.85rem; transition: var(--transition); border-left: 4px solid transparent; }
+    .reader-card:hover { transform: translateY(-2px); }
+    .reader-card.is-complete { border-left-color: var(--text-secondary); background: #f8f5f0; }
+    .card-top { display: flex; justify-content: space-between; align-items: center; }
+    .reader-name { font-size: 1.15rem; font-weight: 600; }
+    .unit-badge { background: var(--surface-alt); color: var(--text-primary); padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+    
+    .progress-wrapper { width: 100%; }
+    .progress-info { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem; }
+    .progress-track { width: 100%; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    .is-complete .progress-fill { width: 100% !important; background: var(--text-secondary); }
+    .is-complete .progress-info { color: var(--text-secondary); font-weight: 600; }
+
+    .input-grid { display: grid; grid-template-columns: 1.5fr 1fr auto; gap: 0.5rem; align-items: stretch; }
+    .form-select, .num-input { padding: 0.65rem; border: 1.5px solid var(--text-secondary); border-radius: 8px; font-size: 0.95rem; background: var(--surface); min-height: 40px; }
+    .form-select:focus, .num-input:focus { outline: none; border-color: var(--accent); }
+    .num-input { text-align: center; }
+    .save-btn { min-width: auto; padding: 0.65rem 1rem; }
+    
+    .toggle-btn { background: none; border: 1.5px dashed var(--text-secondary); color: var(--text-primary); padding: 0.65rem; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; min-height: 40px; transition: var(--transition); display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+    .toggle-btn:hover { border-color: var(--accent); color: var(--accent); background: #fff9f6; }
+    .toggle-btn.is-complete { border-style: solid; background: var(--surface-alt); color: var(--text-primary); cursor: pointer; }
+    .toggle-btn.is-complete:hover { background: #eee8df; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); align-items: center; justify-content: center; z-index: 100; padding: 1rem; opacity: 0; transition: opacity 0.2s; }
+    .modal-overlay.open { display: flex; opacity: 1; }
+    .modal { background: var(--bg); padding: 2rem; border-radius: var(--radius); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
+    .modal h2 { margin-bottom: 1.5rem; font-size: 1.4rem; }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; }
+    .form-input { width: 100%; padding: 0.75rem; border: 1.5px solid var(--text-secondary); border-radius: 8px; background: var(--surface); font-size: 1rem; }
+    .form-input:focus { outline: none; border-color: var(--accent); }
+    
+    .group-section { background: var(--surface); padding: 1.25rem; border-radius: var(--radius); margin-bottom: 1rem; }
+    .group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .group-title { font-size: 1.1rem; font-weight: 600; }
+    .participant-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+    .participant-item { display: flex; align-items: center; gap: 0.75rem; background: var(--bg); padding: 0.65rem; border-radius: 8px; }
+    .participant-order { font-size: 0.8rem; color: var(--text-secondary); background: var(--surface-alt); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+    .participant-name { flex: 1; font-weight: 500; }
+    .participant-remove { background: none; border: none; color: var(--error); cursor: pointer; font-size: 1.1rem; padding: 0.25rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .participant-remove.visible { opacity: 1; pointer-events: auto; }
+    
+    .admin-lock-btn { width: 100%; margin-bottom: 0.75rem; }
+    .pin-prompt { background: var(--surface); padding: 1rem; border-radius: var(--radius); margin-bottom: 0.75rem; display: none; animation: fadeIn 0.2s ease; }
+    .pin-prompt.visible { display: block; }
+    .pin-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .pin-input { flex: 1; text-align: center; letter-spacing: 4px; font-size: 1.2rem; padding: 0.65rem; }
+    .pin-error { color: var(--error); font-size: 0.8rem; margin-top: 0.35rem; display: none; }
+    .reader-controls { display: none; gap: 0.5rem; margin-bottom: 0.75rem; animation: fadeIn 0.2s ease; }
+    .reader-controls.visible { display: flex; }
+    
+    .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text-primary); color: var(--bg); padding: 0.75rem 1.5rem; border-radius: 30px; font-size: 0.9rem; opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 200; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .error-msg { color: var(--error); font-size: 0.75rem; width: 100%; text-align: right; margin-top: 0.25rem; min-height: 1em; }
+    .rotation-info { background: var(--surface-alt); padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 1rem; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    [dir="rtl"] .reader-card { text-align: right; border-left: none; border-right: 4px solid transparent; }
+    [dir="rtl"].is-complete { border-right-color: var(--text-secondary); }
+    @media (max-width: 480px) { .countdown-val { font-size: 2.2rem; } .input-grid { grid-template-columns: 1fr 1fr; } .save-btn { grid-column: span 2; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1 id="app-title">Quran Khatam</h1>
+      <div class="header-actions">
+        <div class="sync-pill" id="sync-status">Offline</div>
+        <button class="btn-outline btn" id="open-settings" data-i18n="settings">⚙️ Settings</button>
+      </div>
+    </header>
+
+    <section class="countdown-card">
+      <div class="countdown-val" id="days-left">--</div>
+      <div class="countdown-sub" id="countdown-label">Days Until Rotation</div>
+    </section>
+
+    <main class="assignment-grid" id="assignments-container"></main>
+  </div>
+
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h2 data-i18n="settings">Settings</h2>
+      
+      <div class="form-group">
+        <label data-i18n="language">Language</label>
+        <select id="lang-select" class="form-input">
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="ar">العربية</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label data-i18n="khatam_date">Rotation Date (1st of month)</label>
+        <input type="date" id="khatam-date" class="form-input">
+      </div>
+      
+      <div class="group-section">
+        <div class="group-header">
+          <span class="group-title" data-i18n="group_management">Group Management</span>
+          <button class="btn btn-sm btn-outline" id="toggle-admin">🔐 Admin</button>
+        </div>
+        
+        <div class="pin-prompt" id="pin-prompt">
+          <input type="password" inputmode="numeric" maxlength="4" class="form-input pin-input" id="pin-input" placeholder="••••" autocomplete="off">
+          <div class="pin-row">
+            <button class="btn btn-sm" id="verify-pin-btn">Unlock</button>
+            <button class="btn btn-sm btn-outline" id="cancel-pin-btn">Cancel</button>
+          </div>
+          <div class="pin-error" id="pin-error">Incorrect code</div>
+        </div>
+        
+        <div class="reader-controls" id="reader-controls">
+          <input type="text" id="new-reader" class="form-input" placeholder="Add participant name...">
+          <button class="btn btn-sm" id="add-reader-btn" style="margin-top: 0.5rem;">+ Add</button>
+        </div>
+        
+        <div class="participant-list" id="participant-list"></div>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn-outline btn" id="close-modal" data-i18n="close">Close</button>
+        <button class="btn" id="save-settings" data-i18n="save_apply">Save & Sync</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // QURAN DATA & MAPPING
+    const SURAHS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+    const SURAH_NAMES = ["Al-Fatiha","Al-Baqarah","Aal-Imran","An-Nisa","Al-Maidah","Al-An'am","Al-A'raf","Al-Anfal","At-Tawbah","Yunus","Hud","Yusuf","Ar-Ra'd","Ibrahim","Al-Hijr","An-Nahl","Al-Isra","Al-Kahf","Maryam","Ta-Ha","Al-Anbiya","Al-Hajj","Al-Mu'minun","An-Nur","Al-Furqan","Ash-Shu'ara","An-Naml","Al-Qasas","Al-Ankabut","Ar-Rum","Luqman","As-Sajdah","Al-Ahzab","Saba","Fatir","Ya-Sin","As-Saffat","Sad","Az-Zumar","Ghafir","Fussilat","Ash-Shura","Az-Zukhruf","Ad-Dukhan","Al-Jathiyah","Al-Ahqaf","Muhammad","Al-Fath","Al-Hujurat","Qaf","Adh-Dhariyat","At-Tur","An-Najm","Al-Qamar","Ar-Rahman","Al-Waqi'ah","Al-Hadid","Al-Mujadila","Al-Hashr","Al-Mumtahanah","As-Saff","Al-Jumu'ah","Al-Munafiqun","At-Taghabun","At-Talaq","At-Tahrim","Al-Mulk","Al-Qalam","Al-Haqqah","Al-Ma'arij","Nuh","Al-Jinn","Al-Muzzammil","Al-Muddaththir","Al-Qiyamah","Al-Insan","Al-Mursalat","An-Naba","An-Nazi'at","Abasa","At-Takwir","Al-Infitar","Al-Mutaffifin","Al-Inshiqaq","Al-Buruj","At-Tariq","Al-A'la","Al-Ghashiyah","Al-Fajr","Al-Balad","Ash-Shams","Al-Layl","Ad-Duha","Ash-Sharh","At-Tin","Al-Alaq","Al-Qadr","Al-Bayyinah","Az-Zalzalah","Al-Adiyat","Al-Qari'ah","At-Takathur","Al-Asr","Al-Humazah","Al-Fil","Quraysh","Al-Ma'un","Al-Kawthar","Al-Kafirun","An-Nasr","Al-Masad","Al-Ikhlas","Al-Falaq","An-Nas"];
+    
+    const JUZ_STARTS = [
+      {s:1,a:1}, {s:2,a:142}, {s:2,a:253}, {s:3,a:93}, {s:4,a:24}, {s:4,a:148}, 
+      {s:5,a:82}, {s:6,a:111}, {s:7,a:88}, {s:8,a:41}, {s:9,a:94}, {s:11,a:6}, 
+      {s:12,a:53}, {s:15,a:1}, {s:17,a:1}, {s:18,a:75}, {s:21,a:1}, {s:23,a:1}, 
+      {s:25,a:21}, {s:27,a:56}, {s:29,a:46}, {s:33,a:31}, {s:36,a:28}, {s:39,a:32}, 
+      {s:41,a:47}, {s:46,a:1}, {s:51,a:31}, {s:58,a:1}, {s:67,a:1}, {s:78,a:1}
+    ];
+
+    function toLinear(s, a) { let l=0; for(let i=0; i<s-1; i++) l+=SURAHS[i]; return l+a; }
+    function linearToCoord(idx) { for(let i=0; i<SURAHS.length; i++) { if(idx <= SURAHS[i]) return {s: i+1, a: idx}; idx -= SURAHS[i]; } return {s:114, a:6}; }
+
+    function getJuzRange(juzNum) {
+      const start = JUZ_STARTS[juzNum-1] || {s:1,a:1};
+      if (juzNum < 30) { 
+        const next = JUZ_STARTS[juzNum];
+        const l = toLinear(next.s, next.a) - 1;
+        return { sStart: start, sEnd: linearToCoord(l) };
+      }
+      return { sStart: start, sEnd: {s:114, a:6} };
+    }
+
+    const STORAGE_KEY = 'quran_khatam_v4';
+    const API_URL = '/api/sync';
+    const state = { 
+      lang: 'en', 
+      groupName: 'My Khatam Group',
+      participants: ['Ahmed', 'Fatima', 'Omar', 'Aisha'], // Fixed order set by admin
+      khatamDate: null, 
+      progress: {}, 
+      adminCode: '1234',
+      createdAt: Date.now()
+    };
+    
+    const i18n = {
+      en: { 
+        appTitle: "Quran Khatam", settings: "⚙️ Settings", daysLeft: "Days Until Rotation", 
+        khatam_date: "Rotation Date (1st of month)", group_management: "Group Management",
+        add: "+ Add", close: "Close", save_apply: "Save & Sync", 
+        saveProgress: "Save", markComplete: "Mark Complete", completed: "Completed", undo: "Undo", 
+        offline: "Offline", syncing: "Syncing...", admin_mode: "🔐 Admin", 
+        assigned: "Assigned", progress: "Progress", set_date: "Set date in settings", 
+        sync_success: "Synced", sync_conflict: "Updated from another device", 
+        invalid_ayah: "Ayah outside assigned range", language: "Language",
+        participants: "Participants", rotation_info: "Assignments rotate monthly based on entry order"
+      },
+      fr: { 
+        appTitle: "Khatam Coranique", settings: "⚙️ Paramètres", daysLeft: "Jours avant rotation", 
+        khatam_date: "Date de rotation (1er du mois)", group_management: "Gestion du groupe",
+        add: "+ Ajouter", close: "Fermer", save_apply: "Sauvegarder & Sync", 
+        saveProgress: "Sauver", markComplete: "Terminer", completed: "Terminé", undo: "Annuler", 
+        offline: "Hors ligne", syncing: "Synchronisation...", admin_mode: "🔐 Admin", 
+        assigned: "Assigné", progress: "Progrès", set_date: "Définir dans paramètres", 
+        sync_success: "Synchronisé", sync_conflict: "Mis à jour depuis un autre appareil", 
+        invalid_ayah: "Ayat hors limite", language: "Langue",
+        participants: "Participants", rotation_info: "Les assignments tournent mensuellement"
+      },
+      ar: { 
+        appTitle: "ختمة القرآن", settings: "⚙️ الإعدادات", daysLeft: "أيام حتى الدوران", 
+        khatam_date: "تاريخ الدوران (الأول من الشهر)", group_management: "إدارة المجموعة",
+        add: "+ إضافة", close: "إغلاق", save_apply: "حفظ ومزامنة", 
+        saveProgress: "حفظ", markComplete: "إنهاء", completed: "مكتمل", undo: "تراجع", 
+        offline: "غير متصل", syncing: "جاري المزامنة...", admin_mode: "🔐 مسؤول", 
+        assigned: "مخصص", progress: "التقدم", set_date: "حدد التاريخ من الإعدادات", 
+        sync_success: "تمت المزامنة", sync_conflict: "تم التحديث من جهاز آخر", 
+        invalid_ayah: "آية خارج النطاق المحدد", language: "اللغة",
+        participants: "المشاركون", rotation_info: "تدور المهام شهرياً حسب ترتيب الدخول"
+      }
+    };
+
+    const $ = id => document.getElementById(id);
+    const els = { 
+      title: $('app-title'), daysLeft: $('days-left'), countdownLabel: $('countdown-label'), 
+      container: $('assignments-container'), syncStatus: $('sync-status'), modal: $('modal'), 
+      lang: $('lang-select'), khatamDate: $('khatam-date'), newReader: $('new-reader'), 
+      addBtn: $('add-reader-btn'), participantList: $('participant-list'), 
+      toggleAdmin: $('toggle-admin'), pinPrompt: $('pin-prompt'), pinInput: $('pin-input'), 
+      verifyPinBtn: $('verify-pin-btn'), cancelPinBtn: $('cancel-pin-btn'), 
+      pinError: $('pin-error'), toast: $('toast') 
+    };
+    
+    let isAdminUnlocked = false;
+
+    class SyncManager {
+      constructor() { this.version = 0; this.syncing = false; window.addEventListener('sync:updated', () => this.render()); }
+      async init() { 
+        const cached = localStorage.getItem(STORAGE_KEY); 
+        if (cached) Object.assign(state, JSON.parse(cached)); 
+        if (!state.adminCode) state.adminCode = '1234'; 
+        await this.pull(); 
+        setInterval(() => this.pull(), 3000); 
+        window.addEventListener('online', () => { this.pull(); this.setStatus('online'); }); 
+      }
+      async pull() { 
+        if (!navigator.onLine) return; 
+        try { 
+          const res = await fetch(`${API_URL}?version=${this.version}`); 
+          if (res.status === 304) return; 
+          if (res.ok) { 
+            const {  data, version } = await res.json(); 
+            this.version = version; 
+            Object.assign(state, data); 
+            this.saveLocal(); 
+            this.setStatus('online'); 
+            window.dispatchEvent(new Event('sync:updated')); 
+          } 
+        } catch { this.setStatus('offline'); } 
+      }
+      async push(updateFn) { 
+        if (!isAdminUnlocked) return showToast('Unlock admin first'); 
+        updateFn(state); 
+        this.saveLocal(); 
+        window.dispatchEvent(new Event('sync:updated')); 
+        await this.doPush(); 
+      }
+      async doPush() { 
+        if (this.syncing || !navigator.onLine) return; 
+        this.syncing = true; 
+        this.setStatus('syncing'); 
+        try { 
+          const res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({  state, version: this.version }) }); 
+          if (res.ok) { 
+            const { version } = await res.json(); 
+            this.version = version; 
+            showToast(i18n[state.lang].sync_success); 
+            this.setStatus('online'); 
+          } else if (res.status === 409) { 
+            await this.pull(); 
+            showToast(i18n[state.lang].sync_conflict); 
+            this.setStatus('online'); 
+          } 
+        } catch { this.setStatus('offline'); } finally { this.syncing = false; } 
+      }
+      saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      setStatus(status) { 
+        els.syncStatus.className = `sync-pill ${status}`; 
+        els.syncStatus.textContent = status === 'online' ? '● Live' : status === 'syncing' ? i18n[state.lang].syncing : i18n[state.lang].offline; 
+      }
+      render() { translateUI(); renderAssignments(); updateCountdown(); renderParticipantList(); }
+    }
+    const sync = new SyncManager();
+
+    // Calculate current month's assignments with rotation
+    function calculateAssignments() {
+      if (state.participants.length === 0) return [];
+      
+      const n = state.participants.length;
+      const totalJuz = 30;
+      
+      // Calculate rotation based on months since creation
+      const monthsSinceCreation = state.createdAt ? 
+        Math.floor((Date.now() - state.createdAt) / (1000 * 60 * 60 * 24 * 30.44)) : 0;
+      
+      // Rotate: shift array right by monthsSinceCreation % n
+      const shift = monthsSinceCreation % n;
+      const rotated = [
+        ...state.participants.slice(n - shift), 
+        ...state.participants.slice(0, n - shift)
+      ];
+      
+      // Distribute Juz sequentially
+      const base = Math.floor(totalJuz / n);
+      const remainder = totalJuz % n;
+      let assignments = [];
+      let currentJuz = 1;
+      
+      for (let i = 0; i < n; i++) {
+        const count = i < remainder ? base + 1 : base;
+        assignments.push({
+          reader: rotated[i],
+          originalIndex: state.participants.indexOf(rotated[i]),
+          start: currentJuz,
+          end: currentJuz + count - 1,
+          type: 'juz'
+        });
+        currentJuz += count;
+      }
+      
+      return assignments;
+    }
+
+    function translateUI() { 
+      const t = i18n[state.lang]; 
+      document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr'; 
+      document.documentElement.lang = state.lang; 
+      els.title.textContent = t.appTitle; 
+      els.countdownLabel.textContent = t.daysLeft; 
+      document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t[el.dataset.i18n]); 
+    }
+    
+    function renderAssignments() {
+      const t = i18n[state.lang]; 
+      els.container.innerHTML = ''; 
+      const assignments = calculateAssignments();
+      
+      if (assignments.length === 0) { 
+        els.container.innerHTML = `<p style="text-align:center;color:var(--text-secondary);padding:2rem;">${t.group_management}</p>`; 
+        return; 
+      }
+      
+      // Show rotation info
+      const rotationDiv = document.createElement('div');
+      rotationDiv.className = 'rotation-info';
+      rotationDiv.textContent = t.rotation_info;
+      els.container.appendChild(rotationDiv);
+      
+      assignments.forEach(a => {
+        const prog = state.progress[a.reader] || { completed: false, surah: 1, ayah: 1, timestamp: 0 };
+        const range = getJuzRange(a.start);
+        const curLinear = toLinear(prog.surah, prog.ayah);
+        const startLinear = toLinear(range.sStart.s, range.sStart.a);
+        const endLinear = toLinear(range.sEnd.s, range.sEnd.a);
+        
+        const pct = curLinear > startLinear ? Math.min(100, Math.max(0, Math.round(((curLinear - startLinear) / (endLinear - startLinear)) * 100))) : 0;
+        
+        // Populate valid surahs for this Juz
+        let validSurahs = [];
+        for(let s=range.sStart.s; s<=range.sEnd.s; s++) {
+          validSurahs.push({id: s, name: `${s}. ${SURAH_NAMES[s-1]}`});
+        }
+        
+        const card = document.createElement('div');
+        card.className = `reader-card ${prog.completed ? 'is-complete' : ''}`;
+        card.innerHTML = `
+          <div class="card-top">
+            <span class="reader-name">${a.reader}</span>
+            <span class="unit-badge">${t.assigned}: Juz ${a.start}–${a.end}</span>
+          </div>
+          <div class="progress-wrapper">
+            <div class="progress-info"><span>${t.progress}</span><span class="pct-val">${pct}%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:${prog.completed ? 100 : pct}%"></div></div>
+          </div>
+          <div class="input-grid">
+            <select class="surah-select" data-reader="${a.reader}">
+              ${validSurahs.map(s => `<option value="${s.id}" ${s.id === prog.surah ? 'selected' : ''}>${s.name}</option>`).join('')}
+            </select>
+            <input type="number" class="num-input ayah-input" placeholder="Ayah" min="1" value="${prog.ayah}" data-reader="${a.reader}" data-min="1" data-max="999">
+            <button class="btn btn-sm save-btn" data-reader="${a.reader}">${t.saveProgress}</button>
+          </div>
+          <div class="error-msg"></div>
+          <button class="toggle-btn ${prog.completed ? 'is-complete' : ''}" data-reader="${a.reader}">${prog.completed ? `↩ ${t.undo}` : `☐ ${t.markComplete}`}</button>
+        `;
+        els.container.appendChild(card);
+
+        // Initialize Ayah constraints
+        const sSelect = card.querySelector('.surah-select');
+        const aInput = card.querySelector('.ayah-input');
+        
+        function updateAyahConstraints(surahId) {
+          let min = (surahId === range.sStart.s) ? range.sStart.a : 1;
+          let max = (surahId === range.sEnd.s) ? range.sEnd.a : SURAHS[surahId-1];
+          aInput.min = min; aInput.max = max;
+          aInput.dataset.min = min; aInput.dataset.max = max;
+        }
+        updateAyahConstraints(parseInt(prog.surah) || validSurahs[0].id);
+        
+        sSelect.addEventListener('change', (e) => updateAyahConstraints(parseInt(e.target.value)));
+      });
+
+      // Bind events
+      document.querySelectorAll('.save-btn').forEach(btn => btn.addEventListener('click', e => {
+        const card = e.target.closest('.reader-card');
+        const r = card.querySelector('.reader-name').textContent;
+        const s = parseInt(card.querySelector('.surah-select').value);
+        const a = parseInt(card.querySelector('.ayah-input').value);
+        const err = card.querySelector('.error-msg');
+        
+        const min = parseInt(card.querySelector('.ayah-input').dataset.min);
+        const max = parseInt(card.querySelector('.ayah-input').dataset.max);
+
+        if (isNaN(a) || a < min || a > max) {
+          err.textContent = i18n[state.lang].invalid_ayah;
+          return;
+        }
+        err.textContent = '';
+
+        sync.push(state => {
+          if (!state.progress[r]) state.progress[r] = { completed: false, surah: 1, ayah: 1, timestamp: 0 };
+          state.progress[r].surah = s;
+          state.progress[r].ayah = a;
+          state.progress[r].timestamp = Date.now();
+        });
+      }));
+
+      document.querySelectorAll('.toggle-btn').forEach(btn => btn.addEventListener('click', e => {
+        const r = e.target.dataset.reader;
+        sync.push(state => {
+          if (!state.progress[r]) state.progress[r] = { completed: false, surah: 1, ayah: 1, timestamp: 0 };
+          state.progress[r].completed = !state.progress[r].completed;
+          state.progress[r].timestamp = Date.now();
+        });
+      }));
+    }
+
+    function updateCountdown() { 
+      if (!state.khatamDate) { 
+        els.daysLeft.textContent = i18n[state.lang].set_date; 
+        return; 
+      } 
+      const target = new Date(state.khatamDate);
+      target.setHours(0,0,0,0);
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      const diff = target - now;
+      const days = Math.max(0, Math.ceil(diff / (1000*60*60*24)));
+      els.daysLeft.textContent = days; 
+    }
+    
+    function renderParticipantList() {
+      els.participantList.innerHTML = '';
+      state.participants.forEach((name, i) => {
+        const item = document.createElement('div'); 
+        item.className = 'participant-item';
+        item.innerHTML = `
+          <span class="participant-order">${i + 1}</span>
+          <span class="participant-name">${name}</span>
+          <button class="participant-remove" title="Remove" ${!isAdminUnlocked ? 'disabled' : ''}>×</button>
+        `;
+        item.querySelector('.participant-remove').addEventListener('click', () => {
+          sync.push(s => { 
+            s.participants = s.participants.filter(p => p !== name); 
+            delete s.progress[name]; 
+          });
+        });
+        if (isAdminUnlocked) item.querySelector('.participant-remove').classList.add('visible');
+        els.participantList.appendChild(item);
+      });
+    }
+    
+    function toggleAdminUI() {
+      if (isAdminUnlocked) { 
+        isAdminUnlocked = false; 
+        els.readerControls.classList.remove('visible'); 
+        els.pinPrompt.classList.remove('visible'); 
+        els.toggleAdmin.textContent = i18n[state.lang].admin_mode; 
+        els.pinInput.value = ''; 
+        els.pinError.style.display = 'none'; 
+        renderParticipantList(); 
+      } else { 
+        els.pinPrompt.classList.add('visible'); 
+        els.pinInput.focus(); 
+      }
+    }
+    
+    function verifyPin() { 
+      if (els.pinInput.value.trim() === state.adminCode) { 
+        isAdminUnlocked = true; 
+        els.pinPrompt.classList.remove('visible'); 
+        els.readerControls.classList.add('visible'); 
+        els.toggleAdmin.textContent = '🔒 Lock Admin'; 
+        els.pinInput.value = ''; 
+        els.pinError.style.display = 'none'; 
+        renderParticipantList(); 
+        showToast('Admin Unlocked'); 
+      } else { 
+        els.pinError.style.display = 'block'; 
+        els.pinInput.value = ''; 
+        els.pinInput.focus(); 
+      } 
+    }
+    
+    function showToast(msg) { 
+      els.toast.textContent = msg; 
+      els.toast.classList.add('show'); 
+      setTimeout(() => els.toast.classList.remove('show'), 2000); 
+    }
+
+    $('open-settings').addEventListener('click', () => { 
+      els.modal.classList.add('open'); 
+      renderParticipantList(); 
+      toggleAdminUI(); 
+    });
+    $('close-modal').addEventListener('click', () => els.modal.classList.remove('open'));
+    els.modal.addEventListener('click', e => { if (e.target === els.modal) els.modal.classList.remove('open'); });
+    $('add-reader-btn').addEventListener('click', () => { 
+      const name = els.newReader.value.trim(); 
+      if (name && !state.participants.includes(name)) {
+        sync.push(s => { 
+          s.participants.push(name); 
+          els.newReader.value = ''; 
+        });
+      }
+    });
+    els.newReader.addEventListener('keypress', e => { if (e.key === 'Enter') $('add-reader-btn').click(); });
+    els.toggleAdmin.addEventListener('click', toggleAdminUI);
+    els.verifyPinBtn.addEventListener('click', verifyPin);
+    els.cancelPinBtn.addEventListener('click', toggleAdminUI);
+    els.pinInput.addEventListener('keypress', e => { if (e.key === 'Enter') verifyPin(); });
+    $('save-settings').addEventListener('click', () => { 
+      sync.push(s => { 
+        s.lang = els.lang.value; 
+        s.khatamDate = els.khatamDate.value || null; 
+      }); 
+      els.modal.classList.remove('open'); 
+    });
+
+    sync.init();
+  </script>
+</body>
+</html>
