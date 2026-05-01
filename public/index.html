@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -96,6 +96,8 @@
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     .error-msg { color: var(--error); font-size: 0.75rem; width: 100%; text-align: right; margin-top: 0.25rem; min-height: 1em; }
     .rotation-info { background: var(--surface-alt); padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 1rem; }
+    .admin-only { display: none; }
+    .admin-only.visible { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     [dir="rtl"] .reader-card { text-align: right; border-left: none; border-right: 4px solid transparent; }
     [dir="rtl"].is-complete { border-right-color: var(--text-secondary); }
@@ -120,53 +122,58 @@
     <main class="assignment-grid" id="assignments-container"></main>
   </div>
 
-  <div class="modal-overlay" id="modal">
-    <div class="modal">
-      <h2 data-i18n="settings">Settings</h2>
-      
-      <div class="form-group">
-        <label data-i18n="language">Language</label>
-        <select id="lang-select" class="form-input">
-          <option value="en">English</option>
-          <option value="fr">Français</option>
-          <option value="ar">العربية</option>
-        </select>
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 data-i18n="settings">Settings</h2>
+    
+    <div class="form-group">
+      <label data-i18n="language">Language</label>
+      <select id="lang-select" class="form-input">
+        <option value="ar">العربية</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+    
+    <!-- Admin button (always visible) -->
+    <div class="group-section">
+      <div class="group-header">
+        <span class="group-title" data-i18n="group_management">Group Management</span>
+        <button class="btn btn-sm btn-outline" id="toggle-admin">🔐 Admin</button>
       </div>
       
-      <div class="form-group">
-        <label data-i18n="khatam_date">Rotation Date (1st of month)</label>
-        <input type="date" id="khatam-date" class="form-input">
-      </div>
-      
-      <div class="group-section">
-        <div class="group-header">
-          <span class="group-title" data-i18n="group_management">Group Management</span>
-          <button class="btn btn-sm btn-outline" id="toggle-admin">🔐 Admin</button>
+      <!-- PIN Prompt (hidden by default) -->
+      <div class="pin-prompt" id="pin-prompt" style="display: none;">
+        <input type="password" inputmode="numeric" maxlength="4" class="form-input pin-input" id="pin-input" placeholder="••••" autocomplete="off">
+        <div class="pin-row">
+          <button class="btn btn-sm" id="verify-pin-btn">Unlock</button>
+          <button class="btn btn-sm btn-outline" id="cancel-pin-btn">Cancel</button>
         </div>
-        
-        <div class="pin-prompt" id="pin-prompt">
-          <input type="password" inputmode="numeric" maxlength="4" class="form-input pin-input" id="pin-input" placeholder="••••" autocomplete="off">
-          <div class="pin-row">
-            <button class="btn btn-sm" id="verify-pin-btn">Unlock</button>
-            <button class="btn btn-sm btn-outline" id="cancel-pin-btn">Cancel</button>
-          </div>
-          <div class="pin-error" id="pin-error">Incorrect code</div>
+        <div class="pin-error" id="pin-error" style="display: none;">Incorrect code</div>
+      </div>
+      
+      <!-- Admin-only fields (hidden until unlocked) -->
+      <div id="admin-fields" style="display: none; margin-top: 1rem;">
+        <div class="form-group">
+          <label data-i18n="khatam_date">Rotation Date (1st of month)</label>
+          <input type="date" id="khatam-date" class="form-input">
         </div>
         
         <div class="reader-controls" id="reader-controls">
-          <input type="text" id="new-reader" class="form-input" placeholder="Add participant name...">
-          <button class="btn btn-sm" id="add-reader-btn" style="margin-top: 0.5rem;">+ Add</button>
+          <input type="text" id="new-reader" class="form-input" placeholder="Add participant name..." style="margin-bottom: 0.5rem;">
+          <button class="btn btn-sm" id="add-reader-btn">+ Add Participant</button>
         </div>
         
         <div class="participant-list" id="participant-list"></div>
       </div>
-      
-      <div class="modal-actions">
-        <button class="btn-outline btn" id="close-modal" data-i18n="close">Close</button>
-        <button class="btn" id="save-settings" data-i18n="save_apply">Save & Sync</button>
-      </div>
+    </div>
+    
+    <div class="modal-actions" style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+      <button class="btn-outline btn" id="close-modal" data-i18n="close" style="flex: 1;">Close</button>
+      <button class="btn" id="save-settings" data-i18n="save_apply" style="flex: 2;">Save & Sync</button>
     </div>
   </div>
+</div>
 
   <div class="toast" id="toast"></div>
 
@@ -196,52 +203,22 @@
       return { sStart: start, sEnd: {s:114, a:6} };
     }
 
-    const STORAGE_KEY = 'quran_khatam_v4';
+    const STORAGE_KEY = 'quran_khatam_v6';
     const API_URL = '/api/sync';
     const state = { 
-      lang: 'en', 
-      groupName: 'My Khatam Group',
-      participants: ['Ahmed', 'Fatima', 'Omar', 'Aisha'], // Fixed order set by admin
+      lang: 'ar',  // Default to Arabic
+      participants: ['Zineb', 'Saida', 'Khadija Na', 'Lamiaa', 'Laila', 'Salma', 'Hind', 'Fatima Ezzahra', 'Saila', 'Hanadi', 'Asmaa Oubou',
+      'Khadija', 'Amal', 'Asmae Amzil', 'Meriem'],
       khatamDate: null, 
       progress: {}, 
-      adminCode: '1234',
+      adminCode: '1234', // Will be overridden by env var
       createdAt: Date.now()
     };
     
     const i18n = {
-      en: { 
-        appTitle: "Quran Khatam", settings: "⚙️ Settings", daysLeft: "Days Until Rotation", 
-        khatam_date: "Rotation Date (1st of month)", group_management: "Group Management",
-        add: "+ Add", close: "Close", save_apply: "Save & Sync", 
-        saveProgress: "Save", markComplete: "Mark Complete", completed: "Completed", undo: "Undo", 
-        offline: "Offline", syncing: "Syncing...", admin_mode: "🔐 Admin", 
-        assigned: "Assigned", progress: "Progress", set_date: "Set date in settings", 
-        sync_success: "Synced", sync_conflict: "Updated from another device", 
-        invalid_ayah: "Ayah outside assigned range", language: "Language",
-        participants: "Participants", rotation_info: "Assignments rotate monthly based on entry order"
-      },
-      fr: { 
-        appTitle: "Khatam Coranique", settings: "⚙️ Paramètres", daysLeft: "Jours avant rotation", 
-        khatam_date: "Date de rotation (1er du mois)", group_management: "Gestion du groupe",
-        add: "+ Ajouter", close: "Fermer", save_apply: "Sauvegarder & Sync", 
-        saveProgress: "Sauver", markComplete: "Terminer", completed: "Terminé", undo: "Annuler", 
-        offline: "Hors ligne", syncing: "Synchronisation...", admin_mode: "🔐 Admin", 
-        assigned: "Assigné", progress: "Progrès", set_date: "Définir dans paramètres", 
-        sync_success: "Synchronisé", sync_conflict: "Mis à jour depuis un autre appareil", 
-        invalid_ayah: "Ayat hors limite", language: "Langue",
-        participants: "Participants", rotation_info: "Les assignments tournent mensuellement"
-      },
-      ar: { 
-        appTitle: "ختمة القرآن", settings: "⚙️ الإعدادات", daysLeft: "أيام حتى الدوران", 
-        khatam_date: "تاريخ الدوران (الأول من الشهر)", group_management: "إدارة المجموعة",
-        add: "+ إضافة", close: "إغلاق", save_apply: "حفظ ومزامنة", 
-        saveProgress: "حفظ", markComplete: "إنهاء", completed: "مكتمل", undo: "تراجع", 
-        offline: "غير متصل", syncing: "جاري المزامنة...", admin_mode: "🔐 مسؤول", 
-        assigned: "مخصص", progress: "التقدم", set_date: "حدد التاريخ من الإعدادات", 
-        sync_success: "تمت المزامنة", sync_conflict: "تم التحديث من جهاز آخر", 
-        invalid_ayah: "آية خارج النطاق المحدد", language: "اللغة",
-        participants: "المشاركون", rotation_info: "تدور المهام شهرياً حسب ترتيب الدخول"
-      }
+      en: { appTitle: "Quran Khatam", settings: "⚙️ Settings", daysLeft: "Days Until Rotation", khatam_date: "Rotation Date (1st of month)", group_management: "Group Management", add: "+ Add", close: "Close", save_apply: "Save & Sync", saveProgress: "Save", markComplete: "Mark Complete", completed: "Completed", undo: "Undo", offline: "Offline", syncing: "Syncing...", admin_mode: "🔐 Admin", assigned: "Assigned", progress: "Progress", set_date: "Set date in settings", sync_success: "Synced", sync_conflict: "Updated from another device", invalid_ayah: "Ayah outside assigned range", language: "Language", participants: "Participants", rotation_info: "Assignments rotate monthly based on entry order" },
+      fr: { appTitle: "Khatam Coranique", settings: "⚙️ Paramètres", daysLeft: "Jours avant rotation", khatam_date: "Date de rotation (1er du mois)", group_management: "Gestion du groupe", add: "+ Ajouter", close: "Fermer", save_apply: "Sauvegarder & Sync", saveProgress: "Sauver", markComplete: "Terminer", completed: "Terminé", undo: "Annuler", offline: "Hors ligne", syncing: "Synchronisation...", admin_mode: "🔐 Admin", assigned: "Assigné", progress: "Progrès", set_date: "Définir dans paramètres", sync_success: "Synchronisé", sync_conflict: "Mis à jour depuis un autre appareil", invalid_ayah: "Ayat hors limite", language: "Langue", participants: "Participants", rotation_info: "Les assignments tournent mensuellement" },
+      ar: { appTitle: "ختمة القرآن", settings: "⚙️ الإعدادات", daysLeft: "أيام حتى الدوران", khatam_date: "تاريخ الدوران (الأول من الشهر)", group_management: "إدارة المجموعة", add: "+ إضافة", close: "إغلاق", save_apply: "حفظ ومزامنة", saveProgress: "حفظ", markComplete: "إنهاء", completed: "مكتمل", undo: "تراجع", offline: "غير متصل", syncing: "جاري المزامنة...", admin_mode: "🔐 مسؤول", assigned: "مخصص", progress: "التقدم", set_date: "حدد التاريخ من الإعدادات", sync_success: "تمت المزامنة", sync_conflict: "تم التحديث من جهاز آخر", invalid_ayah: "آية خارج النطاق المحدد", language: "اللغة", participants: "المشاركون", rotation_info: "تدور المهام شهرياً حسب ترتيب الدخول" }
     };
 
     const $ = id => document.getElementById(id);
@@ -252,7 +229,7 @@
       addBtn: $('add-reader-btn'), participantList: $('participant-list'), 
       toggleAdmin: $('toggle-admin'), pinPrompt: $('pin-prompt'), pinInput: $('pin-input'), 
       verifyPinBtn: $('verify-pin-btn'), cancelPinBtn: $('cancel-pin-btn'), 
-      pinError: $('pin-error'), toast: $('toast') 
+      pinError: $('pin-error'), toast: $('toast'), adminSection: $('admin-section')
     };
     
     let isAdminUnlocked = false;
@@ -262,7 +239,6 @@
       async init() { 
         const cached = localStorage.getItem(STORAGE_KEY); 
         if (cached) Object.assign(state, JSON.parse(cached)); 
-        if (!state.adminCode) state.adminCode = '1234'; 
         await this.pull(); 
         setInterval(() => this.pull(), 3000); 
         window.addEventListener('online', () => { this.pull(); this.setStatus('online'); }); 
@@ -273,17 +249,18 @@
           const res = await fetch(`${API_URL}?version=${this.version}`); 
           if (res.status === 304) return; 
           if (res.ok) { 
-            const {  data, version } = await res.json(); 
+            const {  data, version, adminPin } = await res.json(); 
             this.version = version; 
             Object.assign(state, data); 
+            if (adminPin) state.adminCode = adminPin; // Set PIN from env var
             this.saveLocal(); 
             this.setStatus('online'); 
             window.dispatchEvent(new Event('sync:updated')); 
           } 
         } catch { this.setStatus('offline'); } 
       }
-      async push(updateFn) { 
-        if (!isAdminUnlocked) return showToast('Unlock admin first'); 
+      async push(updateFn, requireAdmin = false) { 
+        if (requireAdmin && !isAdminUnlocked) return showToast('Unlock admin first'); 
         updateFn(state); 
         this.saveLocal(); 
         window.dispatchEvent(new Event('sync:updated')); 
@@ -316,42 +293,22 @@
     }
     const sync = new SyncManager();
 
-    // Calculate current month's assignments with rotation
     function calculateAssignments() {
       if (state.participants.length === 0) return [];
-      
       const n = state.participants.length;
       const totalJuz = 30;
-      
-      // Calculate rotation based on months since creation
-      const monthsSinceCreation = state.createdAt ? 
-        Math.floor((Date.now() - state.createdAt) / (1000 * 60 * 60 * 24 * 30.44)) : 0;
-      
-      // Rotate: shift array right by monthsSinceCreation % n
+      const monthsSinceCreation = state.createdAt ? Math.floor((Date.now() - state.createdAt) / (1000 * 60 * 60 * 24 * 30.44)) : 0;
       const shift = monthsSinceCreation % n;
-      const rotated = [
-        ...state.participants.slice(n - shift), 
-        ...state.participants.slice(0, n - shift)
-      ];
-      
-      // Distribute Juz sequentially
+      const rotated = [...state.participants.slice(n - shift), ...state.participants.slice(0, n - shift)];
       const base = Math.floor(totalJuz / n);
       const remainder = totalJuz % n;
       let assignments = [];
       let currentJuz = 1;
-      
       for (let i = 0; i < n; i++) {
         const count = i < remainder ? base + 1 : base;
-        assignments.push({
-          reader: rotated[i],
-          originalIndex: state.participants.indexOf(rotated[i]),
-          start: currentJuz,
-          end: currentJuz + count - 1,
-          type: 'juz'
-        });
+        assignments.push({ reader: rotated[i], originalIndex: state.participants.indexOf(rotated[i]), start: currentJuz, end: currentJuz + count - 1, type: 'juz' });
         currentJuz += count;
       }
-      
       return assignments;
     }
 
@@ -368,13 +325,10 @@
       const t = i18n[state.lang]; 
       els.container.innerHTML = ''; 
       const assignments = calculateAssignments();
-      
       if (assignments.length === 0) { 
         els.container.innerHTML = `<p style="text-align:center;color:var(--text-secondary);padding:2rem;">${t.group_management}</p>`; 
         return; 
       }
-      
-      // Show rotation info
       const rotationDiv = document.createElement('div');
       rotationDiv.className = 'rotation-info';
       rotationDiv.textContent = t.rotation_info;
@@ -386,31 +340,22 @@
         const curLinear = toLinear(prog.surah, prog.ayah);
         const startLinear = toLinear(range.sStart.s, range.sStart.a);
         const endLinear = toLinear(range.sEnd.s, range.sEnd.a);
-        
         const pct = curLinear > startLinear ? Math.min(100, Math.max(0, Math.round(((curLinear - startLinear) / (endLinear - startLinear)) * 100))) : 0;
         
-        // Populate valid surahs for this Juz
         let validSurahs = [];
-        for(let s=range.sStart.s; s<=range.sEnd.s; s++) {
-          validSurahs.push({id: s, name: `${s}. ${SURAH_NAMES[s-1]}`});
-        }
+        for(let s=range.sStart.s; s<=range.sEnd.s; s++) validSurahs.push({id: s, name: `${s}. ${SURAH_NAMES[s-1]}`});
+        
+        // FIX: Default ayah to starting point of assigned Juz
+        const defaultAyah = prog.ayah || range.sStart.a;
         
         const card = document.createElement('div');
         card.className = `reader-card ${prog.completed ? 'is-complete' : ''}`;
         card.innerHTML = `
-          <div class="card-top">
-            <span class="reader-name">${a.reader}</span>
-            <span class="unit-badge">${t.assigned}: Juz ${a.start}–${a.end}</span>
-          </div>
-          <div class="progress-wrapper">
-            <div class="progress-info"><span>${t.progress}</span><span class="pct-val">${pct}%</span></div>
-            <div class="progress-track"><div class="progress-fill" style="width:${prog.completed ? 100 : pct}%"></div></div>
-          </div>
+          <div class="card-top"><span class="reader-name">${a.reader}</span><span class="unit-badge">${t.assigned}: Juz ${a.start}–${a.end}</span></div>
+          <div class="progress-wrapper"><div class="progress-info"><span>${t.progress}</span><span class="pct-val">${pct}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${prog.completed ? 100 : pct}%"></div></div></div>
           <div class="input-grid">
-            <select class="surah-select" data-reader="${a.reader}">
-              ${validSurahs.map(s => `<option value="${s.id}" ${s.id === prog.surah ? 'selected' : ''}>${s.name}</option>`).join('')}
-            </select>
-            <input type="number" class="num-input ayah-input" placeholder="Ayah" min="1" value="${prog.ayah}" data-reader="${a.reader}" data-min="1" data-max="999">
+            <select class="surah-select" data-reader="${a.reader}">${validSurahs.map(s => `<option value="${s.id}" ${s.id === prog.surah ? 'selected' : ''}>${s.name}</option>`).join('')}</select>
+            <input type="number" class="num-input ayah-input" placeholder="Ayah" min="1" value="${defaultAyah}" data-reader="${a.reader}">
             <button class="btn btn-sm save-btn" data-reader="${a.reader}">${t.saveProgress}</button>
           </div>
           <div class="error-msg"></div>
@@ -418,43 +363,30 @@
         `;
         els.container.appendChild(card);
 
-        // Initialize Ayah constraints
         const sSelect = card.querySelector('.surah-select');
         const aInput = card.querySelector('.ayah-input');
-        
         function updateAyahConstraints(surahId) {
           let min = (surahId === range.sStart.s) ? range.sStart.a : 1;
           let max = (surahId === range.sEnd.s) ? range.sEnd.a : SURAHS[surahId-1];
-          aInput.min = min; aInput.max = max;
-          aInput.dataset.min = min; aInput.dataset.max = max;
+          aInput.min = min; aInput.max = max; aInput.dataset.min = min; aInput.dataset.max = max;
         }
         updateAyahConstraints(parseInt(prog.surah) || validSurahs[0].id);
-        
         sSelect.addEventListener('change', (e) => updateAyahConstraints(parseInt(e.target.value)));
       });
 
-      // Bind events
       document.querySelectorAll('.save-btn').forEach(btn => btn.addEventListener('click', e => {
         const card = e.target.closest('.reader-card');
         const r = card.querySelector('.reader-name').textContent;
         const s = parseInt(card.querySelector('.surah-select').value);
         const a = parseInt(card.querySelector('.ayah-input').value);
         const err = card.querySelector('.error-msg');
-        
-        const min = parseInt(card.querySelector('.ayah-input').dataset.min);
-        const max = parseInt(card.querySelector('.ayah-input').dataset.max);
-
-        if (isNaN(a) || a < min || a > max) {
-          err.textContent = i18n[state.lang].invalid_ayah;
-          return;
-        }
+        const min = parseInt(card.querySelector('.ayah-input').min);
+        const max = parseInt(card.querySelector('.ayah-input').max);
+        if (isNaN(a) || a < min || a > max) { err.textContent = i18n[state.lang].invalid_ayah; return; }
         err.textContent = '';
-
         sync.push(state => {
           if (!state.progress[r]) state.progress[r] = { completed: false, surah: 1, ayah: 1, timestamp: 0 };
-          state.progress[r].surah = s;
-          state.progress[r].ayah = a;
-          state.progress[r].timestamp = Date.now();
+          state.progress[r].surah = s; state.progress[r].ayah = a; state.progress[r].timestamp = Date.now();
         });
       }));
 
@@ -462,19 +394,14 @@
         const r = e.target.dataset.reader;
         sync.push(state => {
           if (!state.progress[r]) state.progress[r] = { completed: false, surah: 1, ayah: 1, timestamp: 0 };
-          state.progress[r].completed = !state.progress[r].completed;
-          state.progress[r].timestamp = Date.now();
+          state.progress[r].completed = !state.progress[r].completed; state.progress[r].timestamp = Date.now();
         });
       }));
     }
 
     function updateCountdown() { 
-      if (!state.khatamDate) { 
-        els.daysLeft.textContent = i18n[state.lang].set_date; 
-        return; 
-      } 
-      const target = new Date(state.khatamDate);
-      target.setHours(0,0,0,0);
+      if (!state.khatamDate) { els.daysLeft.textContent = i18n[state.lang].set_date; return; }
+      const target = new Date(state.khatamDate + 'T00:00:00');
       const now = new Date();
       now.setHours(0,0,0,0);
       const diff = target - now;
@@ -485,55 +412,81 @@
     function renderParticipantList() {
       els.participantList.innerHTML = '';
       state.participants.forEach((name, i) => {
-        const item = document.createElement('div'); 
-        item.className = 'participant-item';
-        item.innerHTML = `
-          <span class="participant-order">${i + 1}</span>
-          <span class="participant-name">${name}</span>
-          <button class="participant-remove" title="Remove" ${!isAdminUnlocked ? 'disabled' : ''}>×</button>
-        `;
-        item.querySelector('.participant-remove').addEventListener('click', () => {
-          sync.push(s => { 
-            s.participants = s.participants.filter(p => p !== name); 
-            delete s.progress[name]; 
-          });
-        });
+        const item = document.createElement('div'); item.className = 'participant-item';
+        item.innerHTML = `<span class="participant-order">${i + 1}</span><span class="participant-name">${name}</span><button class="participant-remove" title="Remove" ${!isAdminUnlocked ? 'disabled' : ''}>×</button>`;
+        item.querySelector('.participant-remove').addEventListener('click', () => sync.push(s => { s.participants = s.participants.filter(p => p !== name); delete s.progress[name]; }, true));
         if (isAdminUnlocked) item.querySelector('.participant-remove').classList.add('visible');
         els.participantList.appendChild(item);
       });
     }
     
-    function toggleAdminUI() {
-      if (isAdminUnlocked) { 
-        isAdminUnlocked = false; 
-        els.readerControls.classList.remove('visible'); 
-        els.pinPrompt.classList.remove('visible'); 
-        els.toggleAdmin.textContent = i18n[state.lang].admin_mode; 
-        els.pinInput.value = ''; 
-        els.pinError.style.display = 'none'; 
-        renderParticipantList(); 
-      } else { 
-        els.pinPrompt.classList.add('visible'); 
-        els.pinInput.focus(); 
-      }
-    }
-    
-    function verifyPin() { 
-      if (els.pinInput.value.trim() === state.adminCode) { 
-        isAdminUnlocked = true; 
-        els.pinPrompt.classList.remove('visible'); 
-        els.readerControls.classList.add('visible'); 
-        els.toggleAdmin.textContent = '🔒 Lock Admin'; 
-        els.pinInput.value = ''; 
-        els.pinError.style.display = 'none'; 
-        renderParticipantList(); 
-        showToast('Admin Unlocked'); 
-      } else { 
-        els.pinError.style.display = 'block'; 
-        els.pinInput.value = ''; 
-        els.pinInput.focus(); 
-      } 
-    }
+function toggleAdminUI() {
+  const prompt = document.getElementById('pin-prompt');
+  const fields = document.getElementById('admin-fields');
+  
+  if (isAdminUnlocked) { 
+    // Lock
+    isAdminUnlocked = false; 
+    fields.style.display = 'none';
+    prompt.style.display = 'none';
+    document.getElementById('toggle-admin').textContent = '🔐 Admin';
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-error').style.display = 'none';
+    renderParticipantList(); 
+  } else { 
+    // Show PIN prompt
+    prompt.style.display = 'block';
+    document.getElementById('pin-input').focus();
+  }
+}
+
+function verifyPin() { 
+  const input = document.getElementById('pin-input').value.trim();
+  if (input === state.adminCode) { 
+    isAdminUnlocked = true; 
+    document.getElementById('pin-prompt').style.display = 'none';
+    document.getElementById('admin-fields').style.display = 'block';
+    document.getElementById('reader-controls').style.display = 'block';
+    document.getElementById('toggle-admin').textContent = '🔒 Lock Admin';
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-error').style.display = 'none';
+    renderParticipantList();
+    showToast('Admin Unlocked'); 
+  } else { 
+    document.getElementById('pin-error').style.display = 'block';
+    document.getElementById('pin-input').value = '';
+    document.getElementById('pin-input').focus();
+  } 
+}
+
+// In the save-settings event listener:
+$('save-settings').addEventListener('click', () => { 
+  const newDate = els.khatamDate.value || null;
+  const newLang = els.lang.value;
+  
+  // Check if date changed and require admin
+  if (newDate !== state.khatamDate && !isAdminUnlocked) {
+    return showToast('Unlock admin to change date');
+  }
+  
+  sync.push(s => { 
+    s.lang = newLang; 
+    if (newDate) s.khatamDate = newDate;
+  }, false);
+  
+  els.modal.classList.remove('open'); 
+});
+
+// In open-settings event:
+$('open-settings').addEventListener('click', () => { 
+  els.modal.classList.add('open'); 
+  renderParticipantList();
+  // Reset admin state when opening modal
+  if (!isAdminUnlocked) {
+    document.getElementById('admin-fields').style.display = 'none';
+    document.getElementById('pin-prompt').style.display = 'none';
+  }
+});
     
     function showToast(msg) { 
       els.toast.textContent = msg; 
@@ -541,34 +494,58 @@
       setTimeout(() => els.toast.classList.remove('show'), 2000); 
     }
 
+    // Event Listeners
     $('open-settings').addEventListener('click', () => { 
       els.modal.classList.add('open'); 
-      renderParticipantList(); 
-      toggleAdminUI(); 
+      renderParticipantList();
+      // Show/hide admin section based on unlock state
+      if (isAdminUnlocked) {
+        els.adminSection.classList.add('visible');
+      }
     });
     $('close-modal').addEventListener('click', () => els.modal.classList.remove('open'));
     els.modal.addEventListener('click', e => { if (e.target === els.modal) els.modal.classList.remove('open'); });
+    
     $('add-reader-btn').addEventListener('click', () => { 
       const name = els.newReader.value.trim(); 
-      if (name && !state.participants.includes(name)) {
-        sync.push(s => { 
-          s.participants.push(name); 
-          els.newReader.value = ''; 
-        });
-      }
+      if (name && !state.participants.includes(name)) sync.push(s => { s.participants.push(name); els.newReader.value = ''; }, true);
     });
     els.newReader.addEventListener('keypress', e => { if (e.key === 'Enter') $('add-reader-btn').click(); });
+    
     els.toggleAdmin.addEventListener('click', toggleAdminUI);
     els.verifyPinBtn.addEventListener('click', verifyPin);
-    els.cancelPinBtn.addEventListener('click', toggleAdminUI);
+    els.cancelPinBtn.addEventListener('click', () => {
+      toggleAdminUI();
+      els.adminSection.classList.remove('visible'); // Hide admin section when canceling
+    });
     els.pinInput.addEventListener('keypress', e => { if (e.key === 'Enter') verifyPin(); });
+    
+    // FIX: Save settings now requires admin for date, but not for language
     $('save-settings').addEventListener('click', () => { 
+      const newDate = els.khatamDate.value || null;
+      const newLang = els.lang.value;
+      
+      // Check if date changed and require admin
+      if (newDate !== state.khatamDate && !isAdminUnlocked) {
+        return showToast('Unlock admin to change date');
+      }
+      
       sync.push(s => { 
-        s.lang = els.lang.value; 
-        s.khatamDate = els.khatamDate.value || null; 
-      }); 
+        s.lang = newLang; 
+        if (newDate) s.khatamDate = newDate;
+      }, false); // Language doesn't require admin
+      
       els.modal.classList.remove('open'); 
     });
+
+    // Show admin section only when unlocked
+    function updateAdminVisibility() {
+      if (isAdminUnlocked) {
+        els.adminSection.classList.add('visible');
+      } else {
+        els.adminSection.classList.remove('visible');
+      }
+    }
 
     sync.init();
   </script>

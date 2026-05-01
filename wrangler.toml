@@ -9,3 +9,7 @@ database_id = "6cb2b76c-c1be-4b95-b3fd-f22eea40a783" # Replace with ID from step
 
 [assets]
 directory = "public" # We'll put index.html in /public
+
+# Environment Variables
+[vars]
+ADMIN_PIN = "4042" 

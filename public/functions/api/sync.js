@@ -6,9 +6,9 @@ export async function onRequest({ request, env }) {
   if (path === '/api/sync' && request.method === 'GET') {
     const clientVersion = parseInt(url.searchParams.get('version') || '0');
     const res = await env.DB.prepare('SELECT data, version FROM khatam_state LIMIT 1').first();
-    if (!res) return Response.json({  null, version: 0 });
+    if (!res) return Response.json({  null, version: 0, adminPin: env.ADMIN_PIN });
     if (res.version <= clientVersion) return new Response(null, { status: 304 });
-    return Response.json({  JSON.parse(res.data), version: res.version });
+    return Response.json({  JSON.parse(res.data), version: res.version, adminPin: env.ADMIN_PIN });
   }
 
   // POST /api/sync
