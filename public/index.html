@@ -235,17 +235,18 @@
     let isAdminUnlocked = false;
 
     class SyncManager {
-      constructor() { this.version = 0; this.syncing = false; window.addEventListener('sync:updated', () => this.render()); }
-      async init() { 
-        const cached = localStorage.getItem(STORAGE_KEY); 
-        if (cached) Object.assign(state, JSON.parse(cached)); 
-        await this.pull(); 
-        setInterval(() => this.pull(), 3000); 
-        window.addEventListener('online', () => { this.pull(); this.setStatus('online'); }); 
+      constructor() { this.version = 0; this.syncing = false; this.pending = []; window.addEventListener('sync:updated', () => this.render()); }
+      async init() {
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (cached) Object.assign(state, JSON.parse(cached));
+        await this.pull();
+        setInterval(() => this.pull(), 3000);
+        window.addEventListener('online', () => { this.setStatus('online'); this.doPush().then(() => this.pull()); });
       }
-      async pull() { 
-        if (!navigator.onLine) return; 
-        try { 
+      async pull() {
+        // Don't overwrite local changes that haven't reached the server yet
+        if (!navigator.onLine || this.syncing || this.pending.length) return;
+        try {
           const res = await fetch(`${API_URL}?version=${this.version}`); 
           if (res.status === 304) return; 
           if (res.ok) { 
@@ -261,28 +262,43 @@
       }
       async push(updateFn, requireAdmin = false) { 
         if (requireAdmin && !isAdminUnlocked) return showToast('Unlock admin first'); 
-        updateFn(state); 
-        this.saveLocal(); 
-        window.dispatchEvent(new Event('sync:updated')); 
-        await this.doPush(); 
+        updateFn(state);
+        this.pending.push(updateFn);
+        this.saveLocal();
+        window.dispatchEvent(new Event('sync:updated'));
+        await this.doPush();
       }
-      async doPush() { 
-        if (this.syncing || !navigator.onLine) return; 
-        this.syncing = true; 
-        this.setStatus('syncing'); 
-        try { 
-          const res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({  state, version: this.version }) }); 
-          if (res.ok) { 
-            const { version } = await res.json(); 
-            this.version = version; 
-            showToast(i18n[state.lang].sync_success); 
-            this.setStatus('online'); 
-          } else if (res.status === 409) { 
-            await this.pull(); 
-            showToast(i18n[state.lang].sync_conflict); 
-            this.setStatus('online'); 
-          } 
-        } catch { this.setStatus('offline'); } finally { this.syncing = false; } 
+      async doPush() {
+        // If a push is already in flight, the queued change is sent when it finishes
+        if (this.syncing || !navigator.onLine || !this.pending.length) return;
+        this.syncing = true;
+        this.setStatus('syncing');
+        const sentCount = this.pending.length;
+        let retry = false;
+        try {
+          const res = await fetch(API_URL, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data: state, version: this.version }) });
+          if (res.ok) {
+            const { version } = await res.json();
+            this.version = version;
+            this.pending.splice(0, sentCount);
+            retry = this.pending.length > 0;
+            if (!retry) showToast(i18n[state.lang].sync_success);
+            this.setStatus('online');
+          } else if (res.status === 409) {
+            // Another device saved first: take its state, re-apply our unsent changes, push again
+            const { data, version } = await res.json();
+            this.version = version;
+            if (data) Object.assign(state, data);
+            this.pending.forEach(fn => fn(state));
+            this.saveLocal();
+            window.dispatchEvent(new Event('sync:updated'));
+            showToast(i18n[state.lang].sync_conflict);
+            retry = true;
+          } else {
+            this.setStatus('offline');
+          }
+        } catch { this.setStatus('offline'); } finally { this.syncing = false; }
+        if (retry) await this.doPush();
       }
       saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
       setStatus(status) { 

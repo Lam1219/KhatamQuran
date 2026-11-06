@@ -6,9 +6,9 @@ export async function onRequest({ request, env }) {
   if (path === '/api/sync' && request.method === 'GET') {
     const clientVersion = parseInt(url.searchParams.get('version') || '0');
     const res = await env.DB.prepare('SELECT data, version FROM khatam_state LIMIT 1').first();
-    if (!res) return Response.json({  null, version: 0, adminPin: env.ADMIN_PIN });
+    if (!res) return Response.json({ data: null, version: 0, adminPin: env.ADMIN_PIN });
     if (res.version <= clientVersion) return new Response(null, { status: 304 });
-    return Response.json({  JSON.parse(res.data), version: res.version, adminPin: env.ADMIN_PIN });
+    return Response.json({ data: JSON.parse(res.data), version: res.version, adminPin: env.ADMIN_PIN });
   }
 
   // POST /api/sync
@@ -16,11 +16,11 @@ export async function onRequest({ request, env }) {
     const { data, version } = await request.json();
     if (!data) return new Response('Invalid payload', { status: 400 });
 
-    const current = await env.DB.prepare('SELECT version FROM khatam_state LIMIT 1').first();
+    const current = await env.DB.prepare('SELECT data, version FROM khatam_state LIMIT 1').first();
     const currentVersion = current?.version || 0;
 
     if (version < currentVersion) {
-      return Response.json({  JSON.parse(current.data), version: currentVersion, conflict: true }, { status: 409 });
+      return Response.json({ data: JSON.parse(current.data), version: currentVersion, conflict: true }, { status: 409 });
     }
 
     const newVersion = currentVersion + 1;

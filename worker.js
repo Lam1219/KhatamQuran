@@ -18,7 +18,7 @@ export default {
       const { data, version } = await request.json();
       if (!data) return new Response('Invalid payload', { status: 400 });
 
-      const current = await env.DB.prepare('SELECT version FROM khatam_state LIMIT 1').first();
+      const current = await env.DB.prepare('SELECT data, version FROM khatam_state LIMIT 1').first();
       const currentVersion = current?.version || 0;
 
       if (version < currentVersion) {
